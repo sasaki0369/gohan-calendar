@@ -573,13 +573,17 @@
       emptyMsg.style.display = "block";
     }else{
       emptyMsg.style.display = "none";
-      members.forEach(m=>{
+      const me = members.find(m => m.id === deviceMemberId);
+      const others = members.filter(m => m.id !== deviceMemberId);
+      const ordered = me ? [me, ...others] : members;
+
+      ordered.forEach(m=>{
         const tr = document.createElement("tr");
         const isMine = (m.id === deviceMemberId);
         if(isMine) tr.classList.add("mine");
         const tdName = document.createElement("td");
         tdName.className = "namecol";
-        tdName.textContent = m.name + (isMine ? " (自分)" : "");
+        tdName.textContent = m.name;
         tr.appendChild(tdName);
 
         dateList.forEach(d=>{
