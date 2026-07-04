@@ -4,6 +4,21 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ごはんカレンダー</title>
+
+<!-- ホーム画面追加・アイコン設定（Android / iPhone 共通） -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#B23A22">
+
+<!-- ファビコン -->
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
+
+<!-- iPhone/iPad ホーム画面用（iOSはmanifestのアイコンを見ないため個別に指定） -->
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="ごはんカレンダー">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;600;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
@@ -162,6 +177,17 @@
   }
   thead .badge.zero{ background:transparent; color: var(--ink-soft); font-weight:500; }
   th.today, td.today{ background: #FBF3E4; }
+  tr.mine td.namecol{ background: #F6E9D2; }
+  tr.mine .badge-mine{
+    display:inline-block; margin-left:4px; font-size:9px; color: var(--gold);
+  }
+  .legend i.mine{ border-radius:4px; border:2px solid var(--gold); background:#F6E9D2; }
+
+  .cell-btn.disabled{
+    cursor: default;
+    opacity: 0.55;
+  }
+  .cell-btn.disabled:active{ transform:none; }
 
   tbody td{ padding: 6px; text-align:center; vertical-align: middle; }
 
@@ -260,6 +286,22 @@
     cursor:pointer;
   }
   .empty-msg{ font-size:13px; color: var(--ink-soft); padding: 6px 2px 12px; }
+  .hint{ font-size:12.5px; color: var(--ink-soft); margin: 0 0 10px; }
+  .me-card{
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    background: var(--paper-deep);
+    border: 1px solid var(--gold);
+    border-radius: 10px;
+    padding: 10px 14px;
+  }
+  .me-label{ font-size:11px; color: var(--ink-soft); }
+  .me-name{ font-weight:700; font-size:15px; }
+  .link-btn{
+    margin-left:auto;
+    background:none; border:none; cursor:pointer;
+    color: var(--sorry); font-size:12px; text-decoration:underline;
+    font-family: inherit; padding: 4px 0;
+  }
   .conn-msg{
     font-size: 12px; color: var(--sorry); background: var(--sorry-bg);
     border-radius: 8px; padding: 8px 12px; margin-bottom: 14px; display:none;
@@ -305,6 +347,9 @@
     <span><i class="sorry"></i>いらない（タップで登録／解除）</span>
     <span><i class="none"></i>いる（未登録＝いつも通り）</span>
   </div>
+  <div class="legend" style="margin-top:-14px;">
+    <span><i class="mine"></i>自分の欄（変更できます）</span>
+  </div>
 
   <div class="tablewrap" id="tableWrap">
     <table>
@@ -313,19 +358,35 @@
     </table>
   </div>
   <div class="empty-msg" id="emptyMsg" style="display:none;">
-    まだ家族が登録されていません。下の「家族を管理」から名前を追加してください。
+    まだ家族が登録されていません。下の「名前を登録」から名前を追加してください。
   </div>
 
   <div class="card">
-    <h2>家族を管理</h2>
-    <div class="chips" id="chips"></div>
-    <div class="addrow">
-      <input id="nameInput" type="text" placeholder="名前を入力（例：たろう）" maxlength="10">
-      <button id="addBtn">追加</button>
+    <h2>名前を登録</h2>
+
+    <div id="registerBox">
+      <p class="hint">この端末ではまだ名前が登録されていません。あなたの名前を1つだけ登録してください。</p>
+      <div class="addrow">
+        <input id="nameInput" type="text" placeholder="名前を入力（例：たろう）" maxlength="10">
+        <button id="addBtn">登録する</button>
+      </div>
+    </div>
+
+    <div id="meBox" style="display:none;">
+      <div class="me-card">
+        <span class="me-label">この端末の登録名</span>
+        <span class="me-name" id="meName">–</span>
+        <button id="resetBtn" class="link-btn">名前を訂正する</button>
+      </div>
+    </div>
+
+    <div id="othersBox" style="margin-top:14px;">
+      <p class="hint" id="othersHint" style="display:none;">他の家族（表示のみ・本人以外は編集できません）</p>
+      <div class="chips" id="chips"></div>
     </div>
   </div>
 
-  <footer>タップで「いらない」を登録／もう一度タップで取り消し・家族みんなでリアルタイムに共有されます</footer>
+  <footer>いる・いらないの変更は本人の欄のみ／家族みんなでリアルタイムに共有されます</footer>
 </div>
 
 <!-- ============================================================
@@ -371,6 +432,9 @@
   let members = [];   // [{id, name}]
   let marksData = {}; // { 'YYYY-MM-DD': { memberId: true } }
   let dateList = [];  // Date[] from (today-PAST_DAYS) to (today+FUTURE_DAYS)
+  const DEVICE_KEY = "gohanDeviceMemberId"; // この端末が登録した本人のID（端末ローカル・共有されない）
+  let deviceMemberId = localStorage.getItem(DEVICE_KEY) || null;
+  let membersLoaded = false;
 
   function addDays(d, n){ const r = new Date(d); r.setDate(r.getDate()+n); return r; }
   function isoKey(d){
@@ -453,9 +517,11 @@
       emptyMsg.style.display = "none";
       members.forEach(m=>{
         const tr = document.createElement("tr");
+        const isMine = (m.id === deviceMemberId);
+        if(isMine) tr.classList.add("mine");
         const tdName = document.createElement("td");
         tdName.className = "namecol";
-        tdName.textContent = m.name;
+        tdName.textContent = m.name + (isMine ? " (自分)" : "");
         tr.appendChild(tdName);
 
         dateList.forEach(d=>{
@@ -465,14 +531,19 @@
           if(d.getDate() === 1) td.classList.add("month-start");
           const marked = !!(marksData[dayKey] && marksData[dayKey][m.id]);
           const btn = document.createElement("button");
-          btn.className = "cell-btn" + (marked ? " sorry" : "");
+          btn.className = "cell-btn" + (marked ? " sorry" : "") + (isMine ? "" : " disabled");
           if(marked){
             btn.innerHTML = `<span class="stamp" style="width:44px;height:44px;transform:rotate(-8deg);">
               <span class="kao" style="font-size:14px;">🙇</span>
               <small style="font-size:7px;">ごめん</small>
             </span>`;
           }
-          btn.addEventListener("click", () => toggleCell(m.id, dayKey));
+          if(isMine){
+            btn.addEventListener("click", () => toggleCell(m.id, dayKey));
+          }else{
+            btn.disabled = true;
+            btn.title = "本人以外は変更できません";
+          }
           td.appendChild(btn);
           tr.appendChild(td);
         });
@@ -489,6 +560,7 @@
 
   function toggleCell(memberId, dayKey){
     if(!firebaseReady){ alert("Firebaseが未設定です。README.mdを確認してください。"); return; }
+    if(memberId !== deviceMemberId){ return; } // 本人以外は変更不可
     const marked = !!(marksData[dayKey] && marksData[dayKey][memberId]);
     const ref = db.ref(`gohan/marks/${dayKey}/${memberId}`);
     if(marked) ref.remove();
@@ -497,31 +569,62 @@
 
   function renderChips(){
     const chips = document.getElementById("chips");
+    const othersHint = document.getElementById("othersHint");
     chips.innerHTML = "";
-    members.forEach(m=>{
+    const others = members.filter(m => m.id !== deviceMemberId);
+    othersHint.style.display = others.length ? "block" : "none";
+    others.forEach(m=>{
       const chip = document.createElement("div");
       chip.className = "chip";
       chip.innerHTML = `<span>${escapeHtml(m.name)}</span>`;
-      const rm = document.createElement("button");
-      rm.textContent = "×";
-      rm.title = "削除";
-      rm.addEventListener("click", () => removeMember(m.id));
-      chip.appendChild(rm);
       chips.appendChild(chip);
     });
+  }
+
+  function updateRegistrationUI(){
+    const registerBox = document.getElementById("registerBox");
+    const meBox = document.getElementById("meBox");
+    const meName = document.getElementById("meName");
+    const me = members.find(m => m.id === deviceMemberId);
+    if(me){
+      registerBox.style.display = "none";
+      meBox.style.display = "block";
+      meName.textContent = me.name;
+    }else if(membersLoaded && deviceMemberId){
+      // 登録済みのはずのIDがサーバー上に見つからない（削除された等）場合のみ未登録扱いに戻す
+      deviceMemberId = null;
+      localStorage.removeItem(DEVICE_KEY);
+      registerBox.style.display = "block";
+      meBox.style.display = "none";
+    }else if(!deviceMemberId){
+      registerBox.style.display = "block";
+      meBox.style.display = "none";
+    }
   }
 
   function escapeHtml(s){
     return s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   }
 
-  function addMember(){
+  function registerSelf(){
     if(!firebaseReady){ alert("Firebaseが未設定です。README.mdを確認してください。"); return; }
+    if(deviceMemberId){ return; } // 既にこの端末で登録済み
     const input = document.getElementById("nameInput");
     const name = input.value.trim();
     if(!name) return;
-    db.ref("gohan/members").push({ name });
+    const newRef = db.ref("gohan/members").push({ name });
+    deviceMemberId = newRef.key;
+    localStorage.setItem(DEVICE_KEY, deviceMemberId);
     input.value = "";
+  }
+
+  function resetSelf(){
+    if(!deviceMemberId) return;
+    if(!confirm("この端末の登録名を削除して、登録し直しますか？\n（これまでの「いらない」登録も削除されます）")) return;
+    removeMember(deviceMemberId);
+    deviceMemberId = null;
+    localStorage.removeItem(DEVICE_KEY);
+    updateRegistrationUI();
   }
 
   function removeMember(id){
@@ -550,19 +653,23 @@
     document.getElementById("prevWeek").addEventListener("click", () => { wrap.scrollBy({left: -7*64, behavior:"smooth"}); });
     document.getElementById("nextWeek").addEventListener("click", () => { wrap.scrollBy({left: 7*64, behavior:"smooth"}); });
     document.getElementById("gotoToday").addEventListener("click", scrollToToday);
-    document.getElementById("addBtn").addEventListener("click", addMember);
+    document.getElementById("addBtn").addEventListener("click", registerSelf);
     document.getElementById("nameInput").addEventListener("keydown", (e) => {
-      if(e.key === "Enter") addMember();
+      if(e.key === "Enter") registerSelf();
     });
+    document.getElementById("resetBtn").addEventListener("click", resetSelf);
 
     renderWeekRange();
     renderTable(false);
     renderHero();
+    updateRegistrationUI();
 
     if(firebaseReady){
       db.ref("gohan/members").on("value", snap => {
         const val = snap.val() || {};
         members = Object.keys(val).map(id => ({ id, name: val[id].name }));
+        membersLoaded = true;
+        updateRegistrationUI();
         renderChips();
         renderTable(true);
         renderHero();
