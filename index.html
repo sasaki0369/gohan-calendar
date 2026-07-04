@@ -240,6 +240,7 @@
   .meal-stack{ display:flex; flex-direction:column; align-items:center; gap:3px; }
   .meal-label{ font-size:8.5px; color: var(--ink-soft); line-height:1; }
   .cell-btn.small{ width: 34px; height: 34px; font-size:11px; }
+  .cell-btn.small.sorry{ width: 44px; height: 44px; }
 
   /* ---------- Legend ---------- */
   .scroll-hint{
@@ -614,9 +615,10 @@
     const btn = document.createElement("button");
     btn.className = "cell-btn" + (small ? " small" : "") + (marked ? " sorry" : "") + (isMine ? "" : " disabled");
     if(marked){
-      const stampSize = small ? 26 : 44;
-      const kaoSize = small ? 9 : 14;
-      const textSize = small ? 5 : 7;
+      // 昼・夜どちらの表示でも、いらないスタンプは視認性を優先して同じ大きさにする
+      const stampSize = 44;
+      const kaoSize = 14;
+      const textSize = 7;
       btn.innerHTML = `<span class="stamp" style="width:${stampSize}px;height:${stampSize}px;transform:rotate(-8deg);">
         <span class="kao" style="font-size:${kaoSize}px;">🙇</span>
         <small style="font-size:${textSize}px;">ごめん</small>
@@ -637,8 +639,10 @@
     if(memberId !== deviceMemberId){ return; } // 本人以外は変更不可
     const marked = !!(marksData[dayKey] && marksData[dayKey][memberId] && marksData[dayKey][memberId][meal]);
     const ref = db.ref(`gohan/marks/${dayKey}/${memberId}/${meal}`);
-    if(marked) ref.remove();
-    else ref.set(true);
+    const op = marked ? ref.remove() : ref.set(true);
+    op.catch(err => {
+      alert("保存に失敗しました。通信状況を確認して、もう一度お試しください。\n(" + err.message + ")");
+    });
   }
 
   function renderChips(){
@@ -688,20 +692,46 @@
     const input = document.getElementById("nameInput");
     const name = input.value.trim();
     if(!name) return;
+
+    // 同じ名前がすでに登録されていないか確認（誤って二重登録するのを防ぐ）
+    const dup = members.some(m => m.name === name);
+    if(dup){
+      alert(`「${name}」はすでに登録されています。\n同じ名前の人がすでにいる場合は、他の家族に確認してから、区別できる名前（例：「たろう(父)」など）で登録してください。`);
+      return;
+    }
+
     const lunch = document.getElementById("lunchCheck").checked;
     const newRef = db.ref("gohan/members").push({ name, lunch });
-    deviceMemberId = newRef.key;
-    localStorage.setItem(DEVICE_KEY, deviceMemberId);
+    const newId = newRef.key;
+    deviceMemberId = newId;
+    localStorage.setItem(DEVICE_KEY, newId);
     input.value = "";
     document.getElementById("lunchCheck").checked = false;
 
     // Firebaseからの反映を待たず、その場で自分の行を使えるようにする（リロード不要）
-    members.push({ id: deviceMemberId, name, lunch });
+    if(!members.some(m => m.id === newId)){
+      members.push({ id: newId, name, lunch });
+    }
     membersLoaded = true;
     updateRegistrationUI();
     renderChips();
     renderTable(true);
     renderHero();
+
+    // 実際の書き込みが失敗した場合（ルール未設定・通信エラー等）は、その場で表示を元に戻す
+    newRef.then(() => { /* 成功。すでに反映済みなので何もしない */ })
+      .catch(err => {
+        alert("登録の保存に失敗しました。Firebaseのルール設定を確認してから、もう一度登録してください。\n(" + err.message + ")");
+        members = members.filter(m => m.id !== newId);
+        if(deviceMemberId === newId){
+          deviceMemberId = null;
+          localStorage.removeItem(DEVICE_KEY);
+        }
+        updateRegistrationUI();
+        renderChips();
+        renderTable(true);
+        renderHero();
+      });
   }
 
   function resetSelf(){
@@ -720,7 +750,9 @@
 
   function removeMember(id){
     if(!firebaseReady) return;
-    db.ref(`gohan/members/${id}`).remove();
+    db.ref(`gohan/members/${id}`).remove().catch(err => {
+      alert("削除に失敗しました。\n(" + err.message + ")");
+    });
     db.ref(`gohan/marks`).once("value", snap => {
       snap.forEach(daymarkSnap => {
         daymarkSnap.ref.child(id).remove();
