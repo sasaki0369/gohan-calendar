@@ -176,6 +176,8 @@
     color: var(--sorry);
   }
   thead .badge.zero{ background:transparent; color: var(--ink-soft); font-weight:500; }
+  thead .badge.lunch{ background: #EDE3D0; color: var(--gold); margin-top:3px; }
+  thead .badge.lunch.zero{ background:transparent; }
   th.today, td.today{ background: #FBF3E4; }
   tr.mine td.namecol{ background: #F6E9D2; }
   tr.mine .badge-mine{
@@ -209,6 +211,10 @@
     border: none;
     background: transparent;
   }
+
+  .meal-stack{ display:flex; flex-direction:column; align-items:center; gap:3px; }
+  .meal-label{ font-size:8.5px; color: var(--ink-soft); line-height:1; }
+  .cell-btn.small{ width: 34px; height: 34px; font-size:11px; }
 
   /* ---------- Legend ---------- */
   .scroll-hint{
@@ -287,6 +293,12 @@
   }
   .empty-msg{ font-size:13px; color: var(--ink-soft); padding: 6px 2px 12px; }
   .hint{ font-size:12.5px; color: var(--ink-soft); margin: 0 0 10px; }
+  .lunch-check{
+    display:flex; align-items:center; gap:6px;
+    font-size:12.5px; color: var(--ink-soft);
+    margin: -2px 0 10px;
+  }
+  .me-lunch{ font-size:11px; color: var(--gold); }
   .me-card{
     display:flex; align-items:center; gap:10px; flex-wrap:wrap;
     background: var(--paper-deep);
@@ -350,6 +362,7 @@
   <div class="legend" style="margin-top:-14px;">
     <span><i class="mine"></i>自分の欄（変更できます）</span>
   </div>
+  <div class="scroll-hint" id="lunchHint" style="display:none;">昼ごはんを登録している家族は、昼・夜それぞれタップして登録できます</div>
 
   <div class="tablewrap" id="tableWrap">
     <table>
@@ -366,6 +379,9 @@
 
     <div id="registerBox">
       <p class="hint">この端末ではまだ名前が登録されていません。あなたの名前を1つだけ登録してください。</p>
+      <label class="lunch-check">
+        <input type="checkbox" id="lunchCheck"> 昼ごはんも登録する（夜ごはんは全員登録されます）
+      </label>
       <div class="addrow">
         <input id="nameInput" type="text" placeholder="名前を入力（例：たろう）" maxlength="10">
         <button id="addBtn">登録する</button>
@@ -376,6 +392,7 @@
       <div class="me-card">
         <span class="me-label">この端末の登録名</span>
         <span class="me-name" id="meName">–</span>
+        <span class="me-lunch" id="meLunch" style="display:none;">（昼も登録中）</span>
         <button id="resetBtn" class="link-btn">名前を訂正する</button>
       </div>
     </div>
@@ -452,13 +469,15 @@
     }
   }
 
-  function countSorry(dayKey){
+  function countSorry(dayKey, meal){
     let c = 0;
     for(const m of members){
-      if(marksData[dayKey] && marksData[dayKey][m.id]) c++;
+      if(meal === "l" && !m.lunch) continue;
+      if(marksData[dayKey] && marksData[dayKey][m.id] && marksData[dayKey][m.id][meal]) c++;
     }
     return c;
   }
+  function hasLunchMembers(){ return members.some(m => m.lunch); }
 
   function renderWeekRange(){
     const first = dateList[0], last = dateList[dateList.length-1];
@@ -469,7 +488,7 @@
   function renderHero(){
     const today = new Date(); today.setHours(0,0,0,0);
     const heroCount = document.getElementById("heroCount");
-    heroCount.textContent = members.length ? countSorry(isoKey(today)) : "–";
+    heroCount.textContent = members.length ? countSorry(isoKey(today), "d") : "–";
   }
 
   function scrollToToday(){
@@ -491,6 +510,7 @@
     bodyRows.innerHTML = "";
 
     const today = new Date(); today.setHours(0,0,0,0);
+    document.getElementById("lunchHint").style.display = hasLunchMembers() ? "block" : "none";
 
     const thName = document.createElement("th");
     thName.className = "namecol";
@@ -501,12 +521,17 @@
       const th = document.createElement("th");
       if(isSameDay(d, today)) th.classList.add("today");
       if(d.getDate() === 1) th.classList.add("month-start");
-      const cnt = countSorry(isoKey(d));
+      const cntD = countSorry(isoKey(d), "d");
+      const cntL = countSorry(isoKey(d), "l");
       const monthLabel = d.getDate() === 1 ? `<div class="month-label">${d.getMonth()+1}月</div>` : "";
+      const lunchBadge = hasLunchMembers()
+        ? `<div class="badge lunch ${cntL===0?'zero':''}">昼 ${cntL}</div>`
+        : "";
       th.innerHTML = `
         ${monthLabel}
         <div class="dayname">${d.getMonth()+1}/${d.getDate()}（${DAY_NAMES_SUN0[d.getDay()]}）</div>
-        <div class="badge ${cnt===0?'zero':''}">いらない ${cnt}</div>
+        <div class="badge ${cntD===0?'zero':''}">夜 ${cntD}</div>
+        ${lunchBadge}
       `;
       headRow.appendChild(th);
     });
@@ -529,22 +554,16 @@
           const td = document.createElement("td");
           if(isSameDay(d, today)) td.classList.add("today");
           if(d.getDate() === 1) td.classList.add("month-start");
-          const marked = !!(marksData[dayKey] && marksData[dayKey][m.id]);
-          const btn = document.createElement("button");
-          btn.className = "cell-btn" + (marked ? " sorry" : "") + (isMine ? "" : " disabled");
-          if(marked){
-            btn.innerHTML = `<span class="stamp" style="width:44px;height:44px;transform:rotate(-8deg);">
-              <span class="kao" style="font-size:14px;">🙇</span>
-              <small style="font-size:7px;">ごめん</small>
-            </span>`;
-          }
-          if(isMine){
-            btn.addEventListener("click", () => toggleCell(m.id, dayKey));
+
+          if(m.lunch){
+            const stack = document.createElement("div");
+            stack.className = "meal-stack";
+            stack.appendChild(buildMealButton(m, dayKey, "l", "昼", isMine, true));
+            stack.appendChild(buildMealButton(m, dayKey, "d", "夜", isMine, true));
+            td.appendChild(stack);
           }else{
-            btn.disabled = true;
-            btn.title = "本人以外は変更できません";
+            td.appendChild(buildMealButton(m, dayKey, "d", null, isMine, false));
           }
-          td.appendChild(btn);
           tr.appendChild(td);
         });
         bodyRows.appendChild(tr);
@@ -558,11 +577,41 @@
     }
   }
 
-  function toggleCell(memberId, dayKey){
+  function buildMealButton(member, dayKey, meal, label, isMine, small){
+    const marked = !!(marksData[dayKey] && marksData[dayKey][member.id] && marksData[dayKey][member.id][meal]);
+    const wrap = document.createElement("div");
+    if(label){
+      const lab = document.createElement("div");
+      lab.className = "meal-label";
+      lab.textContent = label;
+      wrap.appendChild(lab);
+    }
+    const btn = document.createElement("button");
+    btn.className = "cell-btn" + (small ? " small" : "") + (marked ? " sorry" : "") + (isMine ? "" : " disabled");
+    if(marked){
+      const stampSize = small ? 26 : 44;
+      const kaoSize = small ? 9 : 14;
+      const textSize = small ? 5 : 7;
+      btn.innerHTML = `<span class="stamp" style="width:${stampSize}px;height:${stampSize}px;transform:rotate(-8deg);">
+        <span class="kao" style="font-size:${kaoSize}px;">🙇</span>
+        <small style="font-size:${textSize}px;">ごめん</small>
+      </span>`;
+    }
+    if(isMine){
+      btn.addEventListener("click", () => toggleCell(member.id, dayKey, meal));
+    }else{
+      btn.disabled = true;
+      btn.title = "本人以外は変更できません";
+    }
+    wrap.appendChild(btn);
+    return wrap;
+  }
+
+  function toggleCell(memberId, dayKey, meal){
     if(!firebaseReady){ alert("Firebaseが未設定です。README.mdを確認してください。"); return; }
     if(memberId !== deviceMemberId){ return; } // 本人以外は変更不可
-    const marked = !!(marksData[dayKey] && marksData[dayKey][memberId]);
-    const ref = db.ref(`gohan/marks/${dayKey}/${memberId}`);
+    const marked = !!(marksData[dayKey] && marksData[dayKey][memberId] && marksData[dayKey][memberId][meal]);
+    const ref = db.ref(`gohan/marks/${dayKey}/${memberId}/${meal}`);
     if(marked) ref.remove();
     else ref.set(true);
   }
@@ -585,11 +634,13 @@
     const registerBox = document.getElementById("registerBox");
     const meBox = document.getElementById("meBox");
     const meName = document.getElementById("meName");
+    const meLunch = document.getElementById("meLunch");
     const me = members.find(m => m.id === deviceMemberId);
     if(me){
       registerBox.style.display = "none";
       meBox.style.display = "block";
       meName.textContent = me.name;
+      meLunch.style.display = me.lunch ? "inline" : "none";
     }else if(membersLoaded && deviceMemberId){
       // 登録済みのはずのIDがサーバー上に見つからない（削除された等）場合のみ未登録扱いに戻す
       deviceMemberId = null;
@@ -612,10 +663,12 @@
     const input = document.getElementById("nameInput");
     const name = input.value.trim();
     if(!name) return;
-    const newRef = db.ref("gohan/members").push({ name });
+    const lunch = document.getElementById("lunchCheck").checked;
+    const newRef = db.ref("gohan/members").push({ name, lunch });
     deviceMemberId = newRef.key;
     localStorage.setItem(DEVICE_KEY, deviceMemberId);
     input.value = "";
+    document.getElementById("lunchCheck").checked = false;
   }
 
   function resetSelf(){
@@ -667,7 +720,7 @@
     if(firebaseReady){
       db.ref("gohan/members").on("value", snap => {
         const val = snap.val() || {};
-        members = Object.keys(val).map(id => ({ id, name: val[id].name }));
+        members = Object.keys(val).map(id => ({ id, name: val[id].name, lunch: !!val[id].lunch }));
         membersLoaded = true;
         updateRegistrationUI();
         renderChips();
