@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ごはんカレンダー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;600;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper: #FAF6ED;
+    --paper-deep: #F2EBDB;
+    --line: #DED2B4;
+    --ink: #2E2A22;
+    --ink-soft: #7A7261;
+    --sorry: #B23A22;         /* 詫び印の朱色 */
+    --sorry-bg: #F5DFD6;
+    --gold: #A5813C;
+    --shadow: 0 1px 0 rgba(46,42,34,0.06);
+  }
+
+  * { box-sizing: border-box; }
+
+  body{
+    margin:0;
+    background:
+      radial-gradient(ellipse at top left, rgba(165,129,60,0.05), transparent 55%),
+      var(--paper);
+    color: var(--ink);
+    font-family: "Zen Kaku Gothic New", sans-serif;
+    min-height:100vh;
+    padding: 20px 14px 60px;
+  }
+
+  .wrap{ max-width: 760px; margin: 0 auto; }
+
+  /* ---------- Header ---------- */
+  header{
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 14px;
+    margin-bottom: 18px;
+  }
+  h1{
+    font-family: "Shippori Mincho", serif;
+    font-weight: 700;
+    font-size: 30px;
+    margin: 0;
+    letter-spacing: 0.06em;
+    line-height:1.1;
+  }
+  h1 span{
+    display:block;
+    font-family: "Zen Kaku Gothic New", sans-serif;
+    font-weight: 500;
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    letter-spacing: 0.14em;
+    margin-top: 5px;
+  }
+
+  /* ---------- Apologetic hanko stamp ---------- */
+  .stamp{
+    position: relative;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    border-radius: 50%;
+    border: 2px solid var(--sorry);
+    color: var(--sorry);
+    font-family: "Shippori Mincho", serif;
+    mix-blend-mode: multiply;
+    opacity: 0.92;
+  }
+  .stamp::after{
+    content:"";
+    position:absolute; inset: 3px;
+    border-radius:50%;
+    border: 1px dashed var(--sorry);
+    opacity:.5;
+  }
+  .stamp-hero{
+    width: 72px; height: 72px;
+    transform: rotate(-9deg);
+    flex-shrink:0;
+  }
+  .stamp-hero .kao{ font-size: 20px; line-height:1; transform: rotate(9deg); }
+  .stamp-hero b{ font-size: 18px; line-height:1; transform: rotate(9deg); }
+  .stamp-hero small{ font-size: 8px; letter-spacing:0.05em; transform: rotate(9deg); }
+
+  /* ---------- Week nav ---------- */
+  .weeknav{
+    display:flex; align-items:center; justify-content:space-between;
+    background: var(--paper-deep);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 8px;
+    margin-bottom: 14px;
+  }
+  .weeknav button{
+    background:none; border:none; cursor:pointer;
+    font-family: "Zen Kaku Gothic New", sans-serif;
+    font-size: 18px; color: var(--ink);
+    padding: 6px 12px;
+  }
+  .weeknav .range{ font-weight:700; font-size:15px; letter-spacing:0.02em; }
+  .weeknav .today-btn{
+    font-size: 12px;
+    border: 1px solid var(--gold);
+    color: var(--gold);
+    border-radius: 20px;
+    padding: 4px 12px;
+    background:#fff;
+  }
+
+  /* ---------- Table ---------- */
+  .tablewrap{
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #FFFEFA;
+    box-shadow: var(--shadow);
+    margin-bottom: 18px;
+  }
+  table{ border-collapse: collapse; width: max-content; }
+  th, td{ border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); }
+  th:last-child, td:last-child{ border-right:none; }
+
+  th.namecol, td.namecol{
+    position: sticky; left:0; z-index:2;
+    background: #FFFEFA;
+    text-align:left;
+    padding: 10px 12px;
+    font-weight: 700;
+    min-width: 84px;
+    border-right: 1px solid var(--line);
+  }
+  thead th.namecol{ background: var(--paper-deep); z-index:3; }
+
+  thead th{
+    width: 64px;
+    padding: 8px 4px 10px;
+    text-align:center;
+    background: var(--paper-deep);
+    font-weight:500;
+  }
+  tbody td{ width: 64px; }
+  thead .dayname{ font-size: 13px; font-weight:700; letter-spacing:0.04em; }
+  thead .daydate{ font-size: 10.5px; color: var(--ink-soft); margin-top:1px; }
+  thead .badge{
+    display:inline-block;
+    margin-top: 6px;
+    font-size: 10px;
+    font-weight:700;
+    padding: 2px 7px;
+    border-radius: 20px;
+    background: var(--sorry-bg);
+    color: var(--sorry);
+  }
+  thead .badge.zero{ background:transparent; color: var(--ink-soft); font-weight:500; }
+  th.today, td.today{ background: #FBF3E4; }
+
+  tbody td{ padding: 6px; text-align:center; vertical-align: middle; }
+
+  .cell-btn{
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    border: 1.5px dashed var(--line);
+    background: transparent;
+    cursor:pointer;
+    display:inline-flex; align-items:center; justify-content:center;
+    font-family: "Shippori Mincho", serif;
+    font-size: 15px;
+    color: var(--ink-soft);
+    transition: transform .12s ease;
+    padding: 0;
+  }
+  .cell-btn:active{ transform: scale(0.9); }
+  .cell-btn.sorry{
+    border: none;
+    background: transparent;
+  }
+
+  /* ---------- Legend ---------- */
+  .scroll-hint{
+    text-align:center; font-size: 11px; color: var(--ink-soft);
+    margin: -6px 0 12px;
+  }
+
+  th.month-start, td.month-start{ border-left: 2px solid var(--gold); }
+  thead .month-label{
+    font-size: 9.5px; color: var(--gold); font-weight:700;
+    letter-spacing:0.06em; margin-bottom: 1px;
+  }
+
+  .legend{
+    display:flex; gap:18px; font-size:12px; color: var(--ink-soft);
+    margin: -4px 0 18px 2px; flex-wrap:wrap;
+  }
+  .legend span{ display:flex; align-items:center; gap:6px; }
+  .legend i{ width:16px; height:16px; border-radius:50%; display:inline-block; }
+  .legend i.sorry{ border:2px solid var(--sorry); background:var(--sorry-bg); }
+  .legend i.none{ border:1.5px dashed var(--line); }
+
+  /* ---------- Family management ---------- */
+  .card{
+    background: #FFFEFA;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 16px 14px;
+  }
+  .card h2{
+    font-family:"Shippori Mincho", serif;
+    font-size: 15px; margin: 0 0 10px;
+    letter-spacing:0.04em;
+  }
+  .chips{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom: 12px; }
+  .chip{
+    display:flex; align-items:center; gap:6px;
+    background: var(--paper-deep);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 6px 6px 6px 14px;
+    font-size: 13px;
+    font-weight:500;
+  }
+  .chip button{
+    background: none; border:none; cursor:pointer;
+    color: var(--ink-soft);
+    width: 20px; height:20px;
+    border-radius: 50%;
+    font-size: 13px;
+    line-height:1;
+  }
+  .chip button:hover{ background: var(--sorry-bg); color: var(--sorry); }
+  .addrow{ display:flex; gap:8px; }
+  .addrow input{
+    flex:1;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-family: inherit;
+    font-size: 14px;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  .addrow input:focus{ outline: 2px solid var(--gold); outline-offset:1px; }
+  .addrow button{
+    background: var(--ink);
+    color: #FAF6ED;
+    border:none;
+    border-radius: 8px;
+    padding: 0 18px;
+    font-family: inherit;
+    font-weight:700;
+    font-size: 14px;
+    cursor:pointer;
+  }
+  .empty-msg{ font-size:13px; color: var(--ink-soft); padding: 6px 2px 12px; }
+  .conn-msg{
+    font-size: 12px; color: var(--sorry); background: var(--sorry-bg);
+    border-radius: 8px; padding: 8px 12px; margin-bottom: 14px; display:none;
+  }
+
+  footer{
+    text-align:center; font-size: 11px; color: var(--ink-soft);
+    margin-top: 22px; letter-spacing: 0.04em;
+  }
+
+  @media (max-width: 480px){
+    h1{ font-size: 24px; }
+    .stamp-hero{ width:58px; height:58px; }
+    .stamp-hero b{ font-size:15px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>ごはんカレンダー<span>「いらない日」だけ登録する、家族の夜ごはん表</span></h1>
+    <div class="stamp stamp-hero" id="heroStamp">
+      <div class="kao">🙇</div>
+      <b id="heroCount">–</b>
+      <small>ごめん</small>
+    </div>
+  </header>
+
+  <div class="conn-msg" id="connMsg">Firebaseの設定が未入力です。README.mdの手順に沿って設定してください。</div>
+
+  <div class="weeknav">
+    <button id="prevWeek" aria-label="7日前へ">←</button>
+    <div>
+      <div class="range" id="weekRange">–</div>
+      <div style="text-align:center;"><button class="today-btn" id="gotoToday">今日へ</button></div>
+    </div>
+    <button id="nextWeek" aria-label="7日後へ">→</button>
+  </div>
+  <div class="scroll-hint">← 表を横にスクロールすると前後の日程が見られます →</div>
+
+  <div class="legend">
+    <span><i class="sorry"></i>いらない（タップで登録／解除）</span>
+    <span><i class="none"></i>いる（未登録＝いつも通り）</span>
+  </div>
+
+  <div class="tablewrap" id="tableWrap">
+    <table>
+      <thead><tr id="headRow"></tr></thead>
+      <tbody id="bodyRows"></tbody>
+    </table>
+  </div>
+  <div class="empty-msg" id="emptyMsg" style="display:none;">
+    まだ家族が登録されていません。下の「家族を管理」から名前を追加してください。
+  </div>
+
+  <div class="card">
+    <h2>家族を管理</h2>
+    <div class="chips" id="chips"></div>
+    <div class="addrow">
+      <input id="nameInput" type="text" placeholder="名前を入力（例：たろう）" maxlength="10">
+      <button id="addBtn">追加</button>
+    </div>
+  </div>
+
+  <footer>タップで「いらない」を登録／もう一度タップで取り消し・家族みんなでリアルタイムに共有されます</footer>
+</div>
+
+<!-- ============================================================
+     Firebase SDK（無料のRealtime Databaseでデータを共有します）
+     ============================================================ -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+  // ▼▼▼ ここに自分のFirebaseプロジェクトの設定を貼り付けてください ▼▼▼
+  // 取得方法は README.md を参照してください。
+  const firebaseConfig = {
+    apiKey: "AIzaSyB_n4s9g7Jloh8XYmwZ1bGSpC6igiy2Sdo",
+    authDomain: "gohan--calendar.firebaseapp.com",
+    databaseURL: "https://gohan--calendar-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "gohan--calendar",
+    storageBucket: "gohan--calendar.firebasestorage.app",
+    messagingSenderId: "1005481496041",
+    appId: "1:1005481496041:web:cfe908b62c1b73055dcf78"
+  };
+  // ▲▲▲ ここまで ▲▲▲
+</script>
+
+<script>
+(function(){
+  const DAY_NAMES_SUN0 = ["日","月","火","水","木","金","土"]; // getDay(): 0=日
+  const PAST_DAYS = 14;    // 今日より前に表示しておく日数（左にスクロールすると見える）
+  const FUTURE_DAYS = 60;  // 今日より後に表示しておく日数
+
+  let app, db;
+  let firebaseReady = false;
+  try{
+    if(firebaseConfig.apiKey !== "YOUR_API_KEY"){
+      app = firebase.initializeApp(firebaseConfig);
+      db = firebase.database();
+      firebaseReady = true;
+    }
+  }catch(e){ console.error(e); }
+
+  if(!firebaseReady){
+    document.getElementById("connMsg").style.display = "block";
+  }
+
+  let members = [];   // [{id, name}]
+  let marksData = {}; // { 'YYYY-MM-DD': { memberId: true } }
+  let dateList = [];  // Date[] from (today-PAST_DAYS) to (today+FUTURE_DAYS)
+
+  function addDays(d, n){ const r = new Date(d); r.setDate(r.getDate()+n); return r; }
+  function isoKey(d){
+    const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
+  }
+  function isSameDay(a,b){
+    return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+  }
+  function buildDateList(){
+    const today = new Date(); today.setHours(0,0,0,0);
+    dateList = [];
+    for(let i=-PAST_DAYS; i<=FUTURE_DAYS; i++){
+      dateList.push(addDays(today, i));
+    }
+  }
+
+  function countSorry(dayKey){
+    let c = 0;
+    for(const m of members){
+      if(marksData[dayKey] && marksData[dayKey][m.id]) c++;
+    }
+    return c;
+  }
+
+  function renderWeekRange(){
+    const first = dateList[0], last = dateList[dateList.length-1];
+    const fmt = (d) => `${d.getMonth()+1}/${d.getDate()}`;
+    document.getElementById("weekRange").textContent = `${fmt(first)} 〜 ${fmt(last)}`;
+  }
+
+  function renderHero(){
+    const today = new Date(); today.setHours(0,0,0,0);
+    const heroCount = document.getElementById("heroCount");
+    heroCount.textContent = members.length ? countSorry(isoKey(today)) : "–";
+  }
+
+  function scrollToToday(){
+    const wrap = document.getElementById("tableWrap");
+    const todayTh = wrap.querySelector("th.today");
+    const nameTh = wrap.querySelector("th.namecol");
+    if(todayTh && nameTh){
+      wrap.scrollLeft = todayTh.offsetLeft - nameTh.offsetWidth;
+    }
+  }
+
+  function renderTable(keepScroll){
+    const headRow = document.getElementById("headRow");
+    const bodyRows = document.getElementById("bodyRows");
+    const emptyMsg = document.getElementById("emptyMsg");
+    const wrap = document.getElementById("tableWrap");
+    const prevScroll = keepScroll ? wrap.scrollLeft : null;
+    headRow.innerHTML = "";
+    bodyRows.innerHTML = "";
+
+    const today = new Date(); today.setHours(0,0,0,0);
+
+    const thName = document.createElement("th");
+    thName.className = "namecol";
+    thName.textContent = "名前";
+    headRow.appendChild(thName);
+
+    dateList.forEach(d=>{
+      const th = document.createElement("th");
+      if(isSameDay(d, today)) th.classList.add("today");
+      if(d.getDate() === 1) th.classList.add("month-start");
+      const cnt = countSorry(isoKey(d));
+      const monthLabel = d.getDate() === 1 ? `<div class="month-label">${d.getMonth()+1}月</div>` : "";
+      th.innerHTML = `
+        ${monthLabel}
+        <div class="dayname">${d.getMonth()+1}/${d.getDate()}（${DAY_NAMES_SUN0[d.getDay()]}）</div>
+        <div class="badge ${cnt===0?'zero':''}">いらない ${cnt}</div>
+      `;
+      headRow.appendChild(th);
+    });
+
+    if(!members.length){
+      emptyMsg.style.display = "block";
+    }else{
+      emptyMsg.style.display = "none";
+      members.forEach(m=>{
+        const tr = document.createElement("tr");
+        const tdName = document.createElement("td");
+        tdName.className = "namecol";
+        tdName.textContent = m.name;
+        tr.appendChild(tdName);
+
+        dateList.forEach(d=>{
+          const dayKey = isoKey(d);
+          const td = document.createElement("td");
+          if(isSameDay(d, today)) td.classList.add("today");
+          if(d.getDate() === 1) td.classList.add("month-start");
+          const marked = !!(marksData[dayKey] && marksData[dayKey][m.id]);
+          const btn = document.createElement("button");
+          btn.className = "cell-btn" + (marked ? " sorry" : "");
+          if(marked){
+            btn.innerHTML = `<span class="stamp" style="width:44px;height:44px;transform:rotate(-8deg);">
+              <span class="kao" style="font-size:14px;">🙇</span>
+              <small style="font-size:7px;">ごめん</small>
+            </span>`;
+          }
+          btn.addEventListener("click", () => toggleCell(m.id, dayKey));
+          td.appendChild(btn);
+          tr.appendChild(td);
+        });
+        bodyRows.appendChild(tr);
+      });
+    }
+
+    if(keepScroll){
+      wrap.scrollLeft = prevScroll;
+    }else{
+      requestAnimationFrame(scrollToToday);
+    }
+  }
+
+  function toggleCell(memberId, dayKey){
+    if(!firebaseReady){ alert("Firebaseが未設定です。README.mdを確認してください。"); return; }
+    const marked = !!(marksData[dayKey] && marksData[dayKey][memberId]);
+    const ref = db.ref(`gohan/marks/${dayKey}/${memberId}`);
+    if(marked) ref.remove();
+    else ref.set(true);
+  }
+
+  function renderChips(){
+    const chips = document.getElementById("chips");
+    chips.innerHTML = "";
+    members.forEach(m=>{
+      const chip = document.createElement("div");
+      chip.className = "chip";
+      chip.innerHTML = `<span>${escapeHtml(m.name)}</span>`;
+      const rm = document.createElement("button");
+      rm.textContent = "×";
+      rm.title = "削除";
+      rm.addEventListener("click", () => removeMember(m.id));
+      chip.appendChild(rm);
+      chips.appendChild(chip);
+    });
+  }
+
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+
+  function addMember(){
+    if(!firebaseReady){ alert("Firebaseが未設定です。README.mdを確認してください。"); return; }
+    const input = document.getElementById("nameInput");
+    const name = input.value.trim();
+    if(!name) return;
+    db.ref("gohan/members").push({ name });
+    input.value = "";
+  }
+
+  function removeMember(id){
+    if(!firebaseReady) return;
+    db.ref(`gohan/members/${id}`).remove();
+    db.ref(`gohan/marks`).once("value", snap => {
+      snap.forEach(daymarkSnap => {
+        daymarkSnap.ref.child(id).remove();
+      });
+    });
+  }
+
+  function attachMarksListener(){
+    if(!firebaseReady) return;
+    db.ref("gohan/marks").on("value", snap => {
+      marksData = snap.val() || {};
+      renderTable(true);
+      renderHero();
+    });
+  }
+
+  function init(){
+    buildDateList();
+
+    const wrap = document.getElementById("tableWrap");
+    document.getElementById("prevWeek").addEventListener("click", () => { wrap.scrollBy({left: -7*64, behavior:"smooth"}); });
+    document.getElementById("nextWeek").addEventListener("click", () => { wrap.scrollBy({left: 7*64, behavior:"smooth"}); });
+    document.getElementById("gotoToday").addEventListener("click", scrollToToday);
+    document.getElementById("addBtn").addEventListener("click", addMember);
+    document.getElementById("nameInput").addEventListener("keydown", (e) => {
+      if(e.key === "Enter") addMember();
+    });
+
+    renderWeekRange();
+    renderTable(false);
+    renderHero();
+
+    if(firebaseReady){
+      db.ref("gohan/members").on("value", snap => {
+        const val = snap.val() || {};
+        members = Object.keys(val).map(id => ({ id, name: val[id].name }));
+        renderChips();
+        renderTable(true);
+        renderHero();
+      });
+      attachMarksListener();
+    }
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
