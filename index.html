@@ -818,6 +818,19 @@
     renderHero();
     updateRegistrationUI();
 
+    // アプリを再度開いた（ホーム画面から起動し直した／バックグラウンドから復帰した）際に
+    // 必ず今日の位置に戻るようにする
+    function resumeToToday(){
+      buildDateList();
+      renderWeekRange();
+      renderTable(false);
+      renderHero();
+    }
+    document.addEventListener("visibilitychange", () => {
+      if(document.visibilityState === "visible") resumeToToday();
+    });
+    window.addEventListener("pageshow", () => { resumeToToday(); });
+
     if(firebaseReady){
       db.ref("gohan/members").on("value", snap => {
         const val = snap.val() || {};
