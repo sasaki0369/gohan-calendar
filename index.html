@@ -505,6 +505,12 @@
   }
   function hasLunchMembers(){ return members.some(m => m.lunch); }
 
+  function dedupeMembers(){
+    const seen = new Map();
+    for(const m of members) seen.set(m.id, m); // 同じidが複数あっても最後の1件だけ残す
+    members = Array.from(seen.values());
+  }
+
   function renderWeekRange(){
     const first = dateList[0], last = dateList[dateList.length-1];
     const fmt = (d) => `${d.getMonth()+1}/${d.getDate()}`;
@@ -527,6 +533,7 @@
   }
 
   function renderTable(keepScroll){
+    dedupeMembers();
     const headRow = document.getElementById("headRow");
     const bodyRows = document.getElementById("bodyRows");
     const emptyMsg = document.getElementById("emptyMsg");
@@ -686,52 +693,72 @@
     return s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   }
 
+  let registering = false;
+
   function registerSelf(){
     if(!firebaseReady){ alert("Firebaseが未設定です。README.mdを確認してください。"); return; }
     if(deviceMemberId){ return; } // 既にこの端末で登録済み
+    if(registering){ return; } // 二重送信防止
     const input = document.getElementById("nameInput");
     const name = input.value.trim();
     if(!name) return;
 
-    // 同じ名前がすでに登録されていないか確認（誤って二重登録するのを防ぐ）
-    const dup = members.some(m => m.name === name);
-    if(dup){
-      alert(`「${name}」はすでに登録されています。\n同じ名前の人がすでにいる場合は、他の家族に確認してから、区別できる名前（例：「たろう(父)」など）で登録してください。`);
-      return;
-    }
+    registering = true;
+    const addBtn = document.getElementById("addBtn");
+    addBtn.disabled = true;
 
-    const lunch = document.getElementById("lunchCheck").checked;
-    const newRef = db.ref("gohan/members").push({ name, lunch });
-    const newId = newRef.key;
-    deviceMemberId = newId;
-    localStorage.setItem(DEVICE_KEY, newId);
-    input.value = "";
-    document.getElementById("lunchCheck").checked = false;
+    // 登録前に必ずFirebaseの最新状態を取得し直す（古い表示データが残っていて二重に見える不具合を防ぐ）
+    db.ref("gohan/members").once("value").then(snap => {
+      const val = snap.val() || {};
+      members = Object.keys(val).map(id => ({ id, name: val[id].name, lunch: !!val[id].lunch }));
+      membersLoaded = true;
 
-    // Firebaseからの反映を待たず、その場で自分の行を使えるようにする（リロード不要）
-    if(!members.some(m => m.id === newId)){
-      members.push({ id: newId, name, lunch });
-    }
-    membersLoaded = true;
-    updateRegistrationUI();
-    renderChips();
-    renderTable(true);
-    renderHero();
+      const dup = members.some(m => m.name === name);
+      if(dup){
+        alert(`「${name}」はすでに登録されています。\n同じ名前の人がすでにいる場合は、他の家族に確認してから、区別できる名前（例：「たろう(父)」など）で登録してください。`);
+        addBtn.disabled = false;
+        registering = false;
+        return;
+      }
 
-    // 実際の書き込みが失敗した場合（ルール未設定・通信エラー等）は、その場で表示を元に戻す
-    newRef.then(() => { /* 成功。すでに反映済みなので何もしない */ })
-      .catch(err => {
-        alert("登録の保存に失敗しました。Firebaseのルール設定を確認してから、もう一度登録してください。\n(" + err.message + ")");
-        members = members.filter(m => m.id !== newId);
-        if(deviceMemberId === newId){
-          deviceMemberId = null;
-          localStorage.removeItem(DEVICE_KEY);
-        }
-        updateRegistrationUI();
-        renderChips();
-        renderTable(true);
-        renderHero();
-      });
+      const lunch = document.getElementById("lunchCheck").checked;
+      const newRef = db.ref("gohan/members").push({ name, lunch });
+      const newId = newRef.key;
+      deviceMemberId = newId;
+      localStorage.setItem(DEVICE_KEY, newId);
+      input.value = "";
+      document.getElementById("lunchCheck").checked = false;
+
+      // Firebaseからの反映を待たず、その場で自分の行を使えるようにする（リロード不要）
+      if(!members.some(m => m.id === newId)){
+        members.push({ id: newId, name, lunch });
+      }
+      updateRegistrationUI();
+      renderChips();
+      renderTable(true);
+      renderHero();
+      addBtn.disabled = false;
+      registering = false;
+
+      // 実際の書き込みが失敗した場合（ルール未設定・通信エラー等）は、その場で表示を元に戻す
+      newRef.then(() => { /* 成功。すでに反映済みなので何もしない */ })
+        .catch(err => {
+          alert("登録の保存に失敗しました。Firebaseのルール設定を確認してから、もう一度登録してください。\n(" + err.message + ")");
+          members = members.filter(m => m.id !== newId);
+          if(deviceMemberId === newId){
+            deviceMemberId = null;
+            localStorage.removeItem(DEVICE_KEY);
+          }
+          updateRegistrationUI();
+          renderChips();
+          renderTable(true);
+          renderHero();
+        });
+    }).catch(err => {
+      addBtn.disabled = false;
+      registering = false;
+      alert("通信に失敗しました。もう一度お試しください。\n(" + err.message + ")");
+    });
   }
 
   function resetSelf(){
