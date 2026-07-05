@@ -344,6 +344,23 @@
     font-size: 12px; color: var(--sorry); background: var(--sorry-bg);
     border-radius: 8px; padding: 8px 12px; margin-bottom: 14px; display:none;
   }
+  .inapp-msg{
+    font-size: 12.5px; color: #6B5316; background: #F6E9C6;
+    border: 1px solid var(--gold);
+    border-radius: 8px; padding: 10px 14px; margin-bottom: 14px;
+  }
+  .inapp-msg p{ margin: 0 0 8px; line-height: 1.5; }
+  .inapp-btn{
+    background: var(--gold);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+  }
 
   footer{
     text-align:center; font-size: 11px; color: var(--ink-soft);
@@ -368,6 +385,11 @@
       <small>ごめん</small>
     </div>
   </header>
+
+  <div class="inapp-msg" id="inAppMsg" style="display:none;">
+    <p id="inAppText"></p>
+    <button id="inAppOpenBtn" class="inapp-btn" style="display:none;"></button>
+  </div>
 
   <div class="conn-msg" id="connMsg">Firebaseの設定が未入力です。README.mdの手順に沿って設定してください。</div>
 
@@ -820,8 +842,39 @@
     });
   }
 
+  function checkInAppBrowser(){
+    const ua = navigator.userAgent || "";
+    const isLine = /\bLine\//i.test(ua);
+    const isFbIg = /FBAN|FBAV|Instagram/i.test(ua);
+    if(!isLine && !isFbIg) return;
+
+    const isIOS = /iPhone|iPad|iPod/i.test(ua);
+    const isAndroid = /Android/i.test(ua);
+    const appName = isLine ? "LINE" : "アプリ内ブラウザ";
+
+    const box = document.getElementById("inAppMsg");
+    const text = document.getElementById("inAppText");
+    const btn = document.getElementById("inAppOpenBtn");
+    box.style.display = "block";
+
+    if(isAndroid){
+      text.textContent = `${appName}内のブラウザで開いています。このままだと「別の端末」として扱われ、登録した名前や設定が保存されないことがあります。下のボタンでChromeで開き直してください。`;
+      btn.textContent = "Chromeで開く";
+      btn.style.display = "inline-block";
+      btn.addEventListener("click", () => {
+        const url = location.href.replace(/^https?:\/\//, "");
+        location.href = `intent://${url}#Intent;scheme=https;package=com.android.chrome;end;`;
+      });
+    }else if(isIOS){
+      text.textContent = `${appName}内のブラウザで開いています。このままだと「別の端末」として扱われ、登録した名前や設定が保存されないことがあります。右下（または右上）の「…」メニューから「Safariで開く」を選んで開き直してください。`;
+    }else{
+      text.textContent = `${appName}内のブラウザで開いています。このままだと「別の端末」として扱われることがあります。お使いのブラウザ（Safari／Chromeなど）で開き直すことをおすすめします。`;
+    }
+  }
+
   function init(){
     buildDateList();
+    checkInAppBrowser();
 
     const wrap = document.getElementById("tableWrap");
     document.getElementById("prevWeek").addEventListener("click", () => { wrap.scrollBy({left: -7*64, behavior:"smooth"}); });
