@@ -55,6 +55,8 @@
     --ink-soft: #7A7261;
     --sorry: #B23A22;         /* 詫び印の朱色 */
     --sorry-bg: #F5DFD6;
+    --biz: #2E5C6B;           /* 出張印の藍色 */
+    --biz-bg: #DCE7E9;
     --gold: #A5813C;
     --shadow: 0 1px 0 rgba(46,42,34,0.06);
   }
@@ -121,6 +123,13 @@
     border-radius:50%;
     border: 1px dashed var(--sorry);
     opacity:.5;
+  }
+  .stamp.biz{
+    border-color: var(--biz);
+    color: var(--biz);
+  }
+  .stamp.biz::after{
+    border-color: var(--biz);
   }
   .stamp-hero{
     width: 72px; height: 72px;
@@ -261,6 +270,7 @@
   .legend span{ display:flex; align-items:center; gap:6px; }
   .legend i{ width:16px; height:16px; border-radius:50%; display:inline-block; }
   .legend i.sorry{ border:2px solid var(--sorry); background:var(--sorry-bg); }
+  .legend i.biz{ border:2px solid var(--biz); background:var(--biz-bg); }
   .legend i.none{ border:1.5px dashed var(--line); }
 
   /* ---------- Family management ---------- */
@@ -382,7 +392,7 @@
     <div class="stamp stamp-hero" id="heroStamp">
       <div class="kao">🙇</div>
       <b id="heroCount">–</b>
-      <small>ごめん</small>
+      <small>いらない</small>
     </div>
   </header>
 
@@ -404,12 +414,14 @@
   <div class="scroll-hint">← 表を横にスクロールすると前後の日程が見られます →</div>
 
   <div class="legend">
-    <span><i class="sorry"></i>いらない（タップで登録／解除）</span>
+    <span><i class="sorry"></i>ごめん（いらない）</span>
+    <span><i class="biz"></i>出張（いらない）</span>
     <span><i class="none"></i>いる（未登録＝いつも通り）</span>
   </div>
   <div class="legend" style="margin-top:-14px;">
     <span><i class="mine"></i>自分の欄（変更できます）</span>
   </div>
+  <div class="scroll-hint">タップするたびに「いる → ごめん → 出張 → いる」の順に切り替わります（出張もいらない人数に含まれます）</div>
   <div class="scroll-hint" id="lunchHint" style="display:none;">昼ごはんを登録している家族は、昼・夜それぞれタップして登録できます</div>
 
   <div class="tablewrap" id="tableWrap">
@@ -657,7 +669,11 @@
   }
 
   function buildMealButton(member, dayKey, meal, label, isMine, small){
-    const marked = !!(marksData[dayKey] && marksData[dayKey][member.id] && marksData[dayKey][member.id][meal]);
+    const raw = marksData[dayKey] && marksData[dayKey][member.id] && marksData[dayKey][member.id][meal];
+    // 古いデータは真偽値(true)で「ごめん」を表していたため、互換性のため変換する
+    const status = raw === true ? "sorry" : (raw || null);
+    const marked = !!status;
+
     const wrap = document.createElement("div");
     if(label){
       const lab = document.createElement("div");
@@ -667,14 +683,15 @@
     }
     const btn = document.createElement("button");
     btn.className = "cell-btn" + (small ? " small" : "") + (marked ? " sorry" : "") + (isMine ? "" : " disabled");
-    if(marked){
-      // 昼・夜どちらの表示でも、いらないスタンプは視認性を優先して同じ大きさにする
-      const stampSize = 44;
-      const kaoSize = 14;
-      const textSize = 7;
-      btn.innerHTML = `<span class="stamp" style="width:${stampSize}px;height:${stampSize}px;transform:rotate(-8deg);">
-        <span class="kao" style="font-size:${kaoSize}px;">🙇</span>
-        <small style="font-size:${textSize}px;">ごめん</small>
+    if(status === "sorry"){
+      btn.innerHTML = `<span class="stamp" style="width:44px;height:44px;transform:rotate(-8deg);">
+        <span class="kao" style="font-size:14px;">🙇</span>
+        <small style="font-size:7px;">ごめん</small>
+      </span>`;
+    }else if(status === "business"){
+      btn.innerHTML = `<span class="stamp biz" style="width:44px;height:44px;transform:rotate(-8deg);">
+        <span class="kao" style="font-size:14px;">💼</span>
+        <small style="font-size:7px;">出張</small>
       </span>`;
     }
     if(isMine){
@@ -690,9 +707,12 @@
   function toggleCell(memberId, dayKey, meal){
     if(!firebaseReady){ alert("Firebaseが未設定です。README.mdを確認してください。"); return; }
     if(memberId !== deviceMemberId){ return; } // 本人以外は変更不可
-    const marked = !!(marksData[dayKey] && marksData[dayKey][memberId] && marksData[dayKey][memberId][meal]);
+    const raw = marksData[dayKey] && marksData[dayKey][memberId] && marksData[dayKey][memberId][meal];
+    const status = raw === true ? "sorry" : (raw || null);
+    // 空白 → ごめん → 出張 → 空白 の順に切り替える
+    const next = status === null ? "sorry" : (status === "sorry" ? "business" : null);
     const ref = db.ref(`gohan/marks/${dayKey}/${memberId}/${meal}`);
-    const op = marked ? ref.remove() : ref.set(true);
+    const op = next === null ? ref.remove() : ref.set(next);
     op.catch(err => {
       alert("保存に失敗しました。通信状況を確認して、もう一度お試しください。\n(" + err.message + ")");
     });
