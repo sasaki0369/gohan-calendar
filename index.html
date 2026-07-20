@@ -498,7 +498,27 @@
   let marksData = {}; // { 'YYYY-MM-DD': { memberId: true } }
   let dateList = [];  // Date[] from (today-PAST_DAYS) to (today+FUTURE_DAYS)
   const DEVICE_KEY = "gohanDeviceMemberId"; // この端末が登録した本人のID（端末ローカル・共有されない）
-  let deviceMemberId = localStorage.getItem(DEVICE_KEY) || null;
+
+  // Safari のプライベートブラウズや一部のアプリ内ブラウザでは localStorage が
+  // 使えず例外を投げることがあるため、失敗時はメモリ上に一時保存してアプリが
+  // 完全に動かなくなるのを防ぐ（保存はその場限りになる旨は別途案内する）
+  const memoryStorage = {};
+  let storageBlocked = false;
+  const safeStorage = {
+    getItem(key){
+      try { return localStorage.getItem(key); }
+      catch(e){ storageBlocked = true; return Object.prototype.hasOwnProperty.call(memoryStorage,key) ? memoryStorage[key] : null; }
+    },
+    setItem(key, val){
+      try { localStorage.setItem(key, val); }
+      catch(e){ storageBlocked = true; memoryStorage[key] = val; }
+    },
+    removeItem(key){
+      try { localStorage.removeItem(key); }
+      catch(e){ storageBlocked = true; delete memoryStorage[key]; }
+    }
+  };
+  let deviceMemberId = safeStorage.getItem(DEVICE_KEY) || null;
   let membersLoaded = false;
 
   function addDays(d, n){ const r = new Date(d); r.setDate(r.getDate()+n); return r; }
@@ -706,7 +726,7 @@
     }else if(membersLoaded && deviceMemberId){
       // 登録済みのはずのIDがサーバー上に見つからない（削除された等）場合のみ未登録扱いに戻す
       deviceMemberId = null;
-      localStorage.removeItem(DEVICE_KEY);
+      safeStorage.removeItem(DEVICE_KEY);
       registerBox.style.display = "block";
       meBox.style.display = "none";
     }else if(!deviceMemberId){
@@ -751,9 +771,12 @@
       const newRef = db.ref("gohan/members").push({ name, lunch });
       const newId = newRef.key;
       deviceMemberId = newId;
-      localStorage.setItem(DEVICE_KEY, newId);
+      safeStorage.setItem(DEVICE_KEY, newId);
       input.value = "";
       document.getElementById("lunchCheck").checked = false;
+      if(storageBlocked){
+        alert("この端末の保存領域が制限されているため、登録はこの画面を閉じるまでの一時的なものになります。\nSafari／Chromeで開き直すと解決することがあります。");
+      }
 
       // Firebaseからの反映を待たず、その場で自分の行を使えるようにする（リロード不要）
       if(!members.some(m => m.id === newId)){
@@ -773,7 +796,7 @@
           members = members.filter(m => m.id !== newId);
           if(deviceMemberId === newId){
             deviceMemberId = null;
-            localStorage.removeItem(DEVICE_KEY);
+            safeStorage.removeItem(DEVICE_KEY);
           }
           updateRegistrationUI();
           renderChips();
@@ -813,7 +836,7 @@
     const oldId = deviceMemberId;
     removeMember(oldId);
     deviceMemberId = null;
-    localStorage.removeItem(DEVICE_KEY);
+    safeStorage.removeItem(DEVICE_KEY);
     members = members.filter(m => m.id !== oldId);
     updateRegistrationUI();
     renderChips();
@@ -874,7 +897,7 @@
 
   function init(){
     buildDateList();
-    checkInAppBrowser();
+    try { checkInAppBrowser(); } catch(e){ console.error("checkInAppBrowser failed:", e); }
 
     const wrap = document.getElementById("tableWrap");
     document.getElementById("prevWeek").addEventListener("click", () => { wrap.scrollBy({left: -7*64, behavior:"smooth"}); });
