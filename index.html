@@ -354,6 +354,65 @@
     font-size: 12px; color: var(--sorry); background: var(--sorry-bg);
     border-radius: 8px; padding: 8px 12px; margin-bottom: 14px; display:none;
   }
+
+  .modal-overlay{
+    position: fixed; inset: 0;
+    background: rgba(46,42,34,0.45);
+    display:flex; align-items:center; justify-content:center;
+    padding: 20px;
+    z-index: 50;
+  }
+  .modal-card{
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 20px;
+    width: 100%;
+    max-width: 320px;
+    box-shadow: 0 8px 24px rgba(46,42,34,0.25);
+  }
+  .modal-card h3{
+    font-family: "Shippori Mincho", serif;
+    font-size: 16px; margin: 0 0 8px;
+    letter-spacing: 0.04em;
+    color: var(--biz);
+  }
+  .modal-card input{
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 14px;
+    background: #FFFEFA;
+    color: var(--ink);
+    margin-bottom: 14px;
+  }
+  .modal-card input:focus{ outline: 2px solid var(--biz); outline-offset:1px; }
+  .modal-actions{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .modal-actions button:not(.link-btn){
+    background: var(--biz);
+    color: #FAF6ED;
+    border:none;
+    border-radius: 8px;
+    padding: 9px 18px;
+    font-family: inherit;
+    font-weight:700;
+    font-size: 14px;
+    cursor:pointer;
+  }
+  .modal-actions .link-btn{ margin-left: 0; }
+  .dest-caption{
+    font-size: 8px;
+    color: var(--biz);
+    text-align:center;
+    max-width: 52px;
+    margin: 2px auto 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+  }
   .inapp-msg{
     font-size: 12.5px; color: #6B5316; background: #F6E9C6;
     border: 1px solid var(--gold);
@@ -464,6 +523,18 @@
   </div>
 
   <footer>いる・いらないの変更は本人の欄のみ／家族みんなでリアルタイムに共有されます</footer>
+
+  <div class="modal-overlay" id="destModal" style="display:none;">
+    <div class="modal-card">
+      <h3>出張先を入力</h3>
+      <p class="hint" style="margin:0 0 10px;">わかる範囲でOKです。あとから書き直せます。</p>
+      <input id="destInput" type="text" placeholder="例：大阪" maxlength="20">
+      <div class="modal-actions">
+        <button id="destSkipBtn" class="link-btn" type="button">あとで入力する</button>
+        <button id="destSaveBtn" type="button">保存</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ============================================================
@@ -673,6 +744,8 @@
     // 古いデータは真偽値(true)で「ごめん」を表していたため、互換性のため変換する
     const status = raw === true ? "sorry" : (raw || null);
     const marked = !!status;
+    const destKey = meal + "Dest";
+    const dest = (marksData[dayKey] && marksData[dayKey][member.id] && marksData[dayKey][member.id][destKey]) || "";
 
     const wrap = document.createElement("div");
     if(label){
@@ -701,7 +774,56 @@
       btn.title = "本人以外は変更できません";
     }
     wrap.appendChild(btn);
+
+    if(status === "business" && isMine){
+      const cap = document.createElement("div");
+      cap.className = "dest-caption";
+      cap.textContent = dest ? dest : "行き先を入力";
+      cap.title = dest || "行き先を入力";
+      cap.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openDestModal(member.id, dayKey, meal, dest);
+      });
+      wrap.appendChild(cap);
+    }else if(status === "business" && dest){
+      const cap = document.createElement("div");
+      cap.className = "dest-caption";
+      cap.style.cursor = "default";
+      cap.textContent = dest;
+      cap.title = dest;
+      wrap.appendChild(cap);
+    }
+
     return wrap;
+  }
+
+  let destModalCtx = null;
+
+  function openDestModal(memberId, dayKey, meal, currentDest){
+    destModalCtx = { memberId, dayKey, meal };
+    const modal = document.getElementById("destModal");
+    const input = document.getElementById("destInput");
+    input.value = currentDest || "";
+    modal.style.display = "flex";
+    setTimeout(() => input.focus(), 50);
+  }
+
+  function closeDestModal(){
+    document.getElementById("destModal").style.display = "none";
+    destModalCtx = null;
+  }
+
+  function saveDest(){
+    if(!destModalCtx) return;
+    const { memberId, dayKey, meal } = destModalCtx;
+    if(memberId !== deviceMemberId){ closeDestModal(); return; }
+    const value = document.getElementById("destInput").value.trim();
+    const ref = db.ref(`gohan/marks/${dayKey}/${memberId}/${meal}Dest`);
+    const op = value ? ref.set(value) : ref.remove();
+    op.catch(err => {
+      alert("行き先の保存に失敗しました。\n(" + err.message + ")");
+    });
+    closeDestModal();
   }
 
   function toggleCell(memberId, dayKey, meal){
@@ -713,7 +835,17 @@
     const next = status === null ? "sorry" : (status === "sorry" ? "business" : null);
     const ref = db.ref(`gohan/marks/${dayKey}/${memberId}/${meal}`);
     const op = next === null ? ref.remove() : ref.set(next);
-    op.catch(err => {
+    op.then(() => {
+      if(next === "business"){
+        const destKey = meal + "Dest";
+        const currentDest = (marksData[dayKey] && marksData[dayKey][memberId] && marksData[dayKey][memberId][destKey]) || "";
+        openDestModal(memberId, dayKey, meal, currentDest);
+      }
+      if(next === null){
+        // 空白に戻したら、行き先も消しておく
+        db.ref(`gohan/marks/${dayKey}/${memberId}/${meal}Dest`).remove().catch(()=>{});
+      }
+    }).catch(err => {
       alert("保存に失敗しました。通信状況を確認して、もう一度お試しください。\n(" + err.message + ")");
     });
   }
@@ -928,6 +1060,14 @@
       if(e.key === "Enter") registerSelf();
     });
     document.getElementById("resetBtn").addEventListener("click", resetSelf);
+    document.getElementById("destSaveBtn").addEventListener("click", saveDest);
+    document.getElementById("destSkipBtn").addEventListener("click", closeDestModal);
+    document.getElementById("destInput").addEventListener("keydown", (e) => {
+      if(e.key === "Enter") saveDest();
+    });
+    document.getElementById("destModal").addEventListener("click", (e) => {
+      if(e.target.id === "destModal") closeDestModal();
+    });
 
     renderWeekRange();
     renderTable(false);
