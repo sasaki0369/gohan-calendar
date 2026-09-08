@@ -517,7 +517,7 @@
     </div>
 
     <div id="othersBox" style="margin-top:14px;">
-      <p class="hint" id="othersHint" style="display:none;">他の家族（この欄もタップして変更できます）</p>
+      <p class="hint" id="othersHint" style="display:none;">他の家族（×をタップすると削除できます）</p>
       <div class="chips" id="chips"></div>
     </div>
   </div>
@@ -846,6 +846,29 @@
       const chip = document.createElement("div");
       chip.className = "chip";
       chip.innerHTML = `<span>${escapeHtml(m.name)}</span>`;
+      const rm = document.createElement("button");
+      rm.textContent = "×";
+      rm.title = "削除";
+      rm.addEventListener("click", () => {
+        if(rm.dataset.confirming){
+          clearTimeout(Number(rm.dataset.timer));
+          removeMember(m.id);
+          renderChips();
+          renderTable(true);
+          renderHero();
+          return;
+        }
+        rm.dataset.confirming = "1";
+        rm.textContent = "本当に削除？";
+        rm.title = "もう一度タップで削除";
+        const t = setTimeout(() => {
+          delete rm.dataset.confirming;
+          rm.textContent = "×";
+          rm.title = "削除";
+        }, 4000);
+        rm.dataset.timer = String(t);
+      });
+      chip.appendChild(rm);
       chips.appendChild(chip);
     });
   }
