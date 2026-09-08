@@ -446,6 +446,13 @@
 <body>
 <div class="wrap">
 
+  <div class="inapp-msg" id="inAppMsg" style="display:none;">
+    <p id="inAppText"></p>
+    <button id="inAppOpenBtn" class="inapp-btn" style="display:none;"></button>
+  </div>
+
+  <div class="conn-msg" id="connMsg">Firebaseの設定が未入力です。README.mdの手順に沿って設定してください。</div>
+
   <header>
     <h1>ごはんカレンダー<span>「いらない日」だけ登録する、家族の夜ごはん表</span></h1>
     <div class="stamp stamp-hero" id="heroStamp">
@@ -454,13 +461,6 @@
       <small>いらない</small>
     </div>
   </header>
-
-  <div class="inapp-msg" id="inAppMsg" style="display:none;">
-    <p id="inAppText"></p>
-    <button id="inAppOpenBtn" class="inapp-btn" style="display:none;"></button>
-  </div>
-
-  <div class="conn-msg" id="connMsg">Firebaseの設定が未入力です。README.mdの手順に沿って設定してください。</div>
 
   <div class="weeknav">
     <button id="prevWeek" aria-label="7日前へ">←</button>
@@ -478,7 +478,7 @@
     <span><i class="none"></i>いる（未登録＝いつも通り）</span>
   </div>
   <div class="legend" style="margin-top:-14px;">
-    <span><i class="mine"></i>自分の欄（変更できます）</span>
+    <span><i class="mine"></i>自分の欄（見分け用の色）</span>
   </div>
   <div class="scroll-hint">タップするたびに「いる → ごめん → 出張 → いる」の順に切り替わります（出張もいらない人数に含まれます）</div>
   <div class="scroll-hint" id="lunchHint" style="display:none;">昼ごはんを登録している家族は、昼・夜それぞれタップして登録できます</div>
@@ -517,12 +517,12 @@
     </div>
 
     <div id="othersBox" style="margin-top:14px;">
-      <p class="hint" id="othersHint" style="display:none;">他の家族（表示のみ・本人以外は編集できません）</p>
+      <p class="hint" id="othersHint" style="display:none;">他の家族（この欄もタップして変更できます）</p>
       <div class="chips" id="chips"></div>
     </div>
   </div>
 
-  <footer>いる・いらないの変更は本人の欄のみ／家族みんなでリアルタイムに共有されます</footer>
+  <footer>いる・いらないの変更はどの欄からでもできます／家族みんなでリアルタイムに共有されます</footer>
 
   <div class="modal-overlay" id="destModal" style="display:none;">
     <div class="modal-card">
@@ -755,7 +755,7 @@
       wrap.appendChild(lab);
     }
     const btn = document.createElement("button");
-    btn.className = "cell-btn" + (small ? " small" : "") + (marked ? " sorry" : "") + (isMine ? "" : " disabled");
+    btn.className = "cell-btn" + (small ? " small" : "") + (marked ? " sorry" : "");
     if(status === "sorry"){
       btn.innerHTML = `<span class="stamp" style="width:44px;height:44px;transform:rotate(-8deg);">
         <span class="kao" style="font-size:14px;">🙇</span>
@@ -767,15 +767,10 @@
         <small style="font-size:7px;">出張</small>
       </span>`;
     }
-    if(isMine){
-      btn.addEventListener("click", () => toggleCell(member.id, dayKey, meal));
-    }else{
-      btn.disabled = true;
-      btn.title = "本人以外は変更できません";
-    }
+    btn.addEventListener("click", () => toggleCell(member.id, dayKey, meal));
     wrap.appendChild(btn);
 
-    if(status === "business" && isMine){
+    if(status === "business"){
       const cap = document.createElement("div");
       cap.className = "dest-caption";
       cap.textContent = dest ? dest : "行き先を入力";
@@ -784,13 +779,6 @@
         e.stopPropagation();
         openDestModal(member.id, dayKey, meal, dest);
       });
-      wrap.appendChild(cap);
-    }else if(status === "business" && dest){
-      const cap = document.createElement("div");
-      cap.className = "dest-caption";
-      cap.style.cursor = "default";
-      cap.textContent = dest;
-      cap.title = dest;
       wrap.appendChild(cap);
     }
 
@@ -816,7 +804,6 @@
   function saveDest(){
     if(!destModalCtx) return;
     const { memberId, dayKey, meal } = destModalCtx;
-    if(memberId !== deviceMemberId){ closeDestModal(); return; }
     const value = document.getElementById("destInput").value.trim();
     const ref = db.ref(`gohan/marks/${dayKey}/${memberId}/${meal}Dest`);
     const op = value ? ref.set(value) : ref.remove();
@@ -828,7 +815,6 @@
 
   function toggleCell(memberId, dayKey, meal){
     if(!firebaseReady){ alert("Firebaseが未設定です。README.mdを確認してください。"); return; }
-    if(memberId !== deviceMemberId){ return; } // 本人以外は変更不可
     const raw = marksData[dayKey] && marksData[dayKey][memberId] && marksData[dayKey][memberId][meal];
     const status = raw === true ? "sorry" : (raw || null);
     // 空白 → ごめん → 出張 → 空白 の順に切り替える
@@ -1001,7 +987,7 @@
     db.ref(`gohan/members/${id}`).remove().catch(err => {
       alert("削除に失敗しました。\n(" + err.message + ")");
     });
-    db.ref(`gohan/marks`).once("value", snap => {
+    db.ref("gohan/marks").once("value", snap => {
       snap.forEach(daymarkSnap => {
         daymarkSnap.ref.child(id).remove();
       });
