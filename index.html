@@ -148,6 +148,11 @@
   .stamp-hero .kao{ font-size: 20px; line-height:1; transform: rotate(9deg); }
   .stamp-hero b{ font-size: 18px; line-height:1; transform: rotate(9deg); }
   .stamp-hero small{ font-size: 8px; letter-spacing:0.05em; transform: rotate(9deg); }
+  .hero-stamps{ display:flex; align-items:flex-end; gap:8px; flex-shrink:0; }
+  .stamp-hero.bento{ transform: rotate(6deg); }
+  .stamp-hero.bento .kao,
+  .stamp-hero.bento b,
+  .stamp-hero.bento small{ transform: rotate(-6deg); }
 
   /* ---------- Week nav ---------- */
   .weeknav{
@@ -447,8 +452,9 @@
   }
 
   @media (max-width: 480px){
-    h1{ font-size: 24px; }
-    .stamp-hero{ width:58px; height:58px; }
+    h1{ font-size: 22px; }
+    .hero-stamps{ gap:6px; }
+    .stamp-hero{ width:54px; height:54px; }
     .stamp-hero b{ font-size:15px; }
   }
 </style>
@@ -465,10 +471,17 @@
 
   <header>
     <h1>ごはんカレンダー<span>「いらない日」だけ登録する、家族の夜ごはん表</span></h1>
-    <div class="stamp stamp-hero" id="heroStamp">
-      <div class="kao">🙇</div>
-      <b id="heroCount">–</b>
-      <small>いらない</small>
+    <div class="hero-stamps">
+      <div class="stamp stamp-hero bento" id="heroBento" style="display:none;">
+        <div class="kao">🍱</div>
+        <b id="heroBentoCount">–</b>
+        <small>お弁当</small>
+      </div>
+      <div class="stamp stamp-hero" id="heroStamp">
+        <div class="kao">🙇</div>
+        <b id="heroCount">–</b>
+        <small>いらない</small>
+      </div>
     </div>
   </header>
 
@@ -655,10 +668,29 @@
     document.getElementById("weekRange").textContent = `${fmt(first)} 〜 ${fmt(last)}`;
   }
 
+  // 指定日の「お弁当」の数（昼ごはんを登録している人のうち、昼がお弁当の人）
+  function countBento(dayKey){
+    let c = 0;
+    for(const m of members){
+      if(!m.lunch) continue;
+      if(marksData[dayKey] && marksData[dayKey][m.id] && marksData[dayKey][m.id].l === "bento") c++;
+    }
+    return c;
+  }
+
   function renderHero(){
     const today = new Date(); today.setHours(0,0,0,0);
     const heroCount = document.getElementById("heroCount");
     heroCount.textContent = members.length ? countSorry(isoKey(today), "d") : "–";
+
+    // お弁当スタンプは、昼ごはんを登録している家族がいるときだけ表示する
+    const heroBento = document.getElementById("heroBento");
+    if(hasLunchMembers()){
+      heroBento.style.display = "flex";
+      document.getElementById("heroBentoCount").textContent = countBento(isoKey(today));
+    }else{
+      heroBento.style.display = "none";
+    }
   }
 
   function scrollToToday(){
