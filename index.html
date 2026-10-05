@@ -57,6 +57,8 @@
     --sorry-bg: #F5DFD6;
     --biz: #2E5C6B;           /* 出張印の藍色 */
     --biz-bg: #DCE7E9;
+    --bento: #6B7F3A;         /* お弁当印の若草色 */
+    --bento-bg: #E6EBD6;
     --gold: #A5813C;
     --shadow: 0 1px 0 rgba(46,42,34,0.06);
   }
@@ -130,6 +132,13 @@
   }
   .stamp.biz::after{
     border-color: var(--biz);
+  }
+  .stamp.bento{
+    border-color: var(--bento);
+    color: var(--bento);
+  }
+  .stamp.bento::after{
+    border-color: var(--bento);
   }
   .stamp-hero{
     width: 72px; height: 72px;
@@ -271,6 +280,7 @@
   .legend i{ width:16px; height:16px; border-radius:50%; display:inline-block; }
   .legend i.sorry{ border:2px solid var(--sorry); background:var(--sorry-bg); }
   .legend i.biz{ border:2px solid var(--biz); background:var(--biz-bg); }
+  .legend i.bento{ border:2px solid var(--bento); background:var(--bento-bg); }
   .legend i.none{ border:1.5px dashed var(--line); }
 
   /* ---------- Family management ---------- */
@@ -475,13 +485,14 @@
   <div class="legend">
     <span><i class="sorry"></i>ごめん（いらない）</span>
     <span><i class="biz"></i>出張（いらない）</span>
+    <span id="bentoLegend" style="display:none;"><i class="bento"></i>お弁当（昼のみ・作る）</span>
     <span><i class="none"></i>いる（未登録＝いつも通り）</span>
   </div>
   <div class="legend" style="margin-top:-14px;">
     <span><i class="mine"></i>自分の欄（見分け用の色）</span>
   </div>
   <div class="scroll-hint">タップするたびに「いる → ごめん → 出張 → いる」の順に切り替わります（出張もいらない人数に含まれます）</div>
-  <div class="scroll-hint" id="lunchHint" style="display:none;">昼ごはんを登録している家族は、昼・夜それぞれタップして登録できます</div>
+  <div class="scroll-hint" id="lunchHint" style="display:none;">昼ごはんを登録している家族は、昼・夜それぞれタップして登録できます。昼は「いる → お弁当 → ごめん → いる」の順です（お弁当はいらない人数に入りません）</div>
 
   <div class="tablewrap" id="tableWrap">
     <table>
@@ -624,7 +635,9 @@
     let c = 0;
     for(const m of members){
       if(meal === "l" && !m.lunch) continue;
-      if(marksData[dayKey] && marksData[dayKey][m.id] && marksData[dayKey][m.id][meal]) c++;
+      const v = marksData[dayKey] && marksData[dayKey][m.id] && marksData[dayKey][m.id][meal];
+      // お弁当は作る必要があるので「いらない」には数えない（ごめん・出張だけ数える）
+      if(v && v !== "bento") c++;
     }
     return c;
   }
@@ -669,6 +682,7 @@
 
     const today = new Date(); today.setHours(0,0,0,0);
     document.getElementById("lunchHint").style.display = hasLunchMembers() ? "block" : "none";
+    document.getElementById("bentoLegend").style.display = hasLunchMembers() ? "flex" : "none";
 
     const thName = document.createElement("th");
     thName.className = "namecol";
@@ -761,6 +775,11 @@
         <span class="kao" style="font-size:14px;">🙇</span>
         <small style="font-size:7px;">ごめん</small>
       </span>`;
+    }else if(status === "bento"){
+      btn.innerHTML = `<span class="stamp bento" style="width:44px;height:44px;transform:rotate(-8deg);">
+        <span class="kao" style="font-size:14px;">🍱</span>
+        <small style="font-size:7px;">お弁当</small>
+      </span>`;
     }else if(status === "business"){
       btn.innerHTML = `<span class="stamp biz" style="width:44px;height:44px;transform:rotate(-8deg);">
         <span class="kao" style="font-size:14px;">💼</span>
@@ -817,8 +836,13 @@
     if(!firebaseReady){ alert("Firebaseが未設定です。README.mdを確認してください。"); return; }
     const raw = marksData[dayKey] && marksData[dayKey][memberId] && marksData[dayKey][memberId][meal];
     const status = raw === true ? "sorry" : (raw || null);
-    // 空白 → ごめん → 出張 → 空白 の順に切り替える
-    const next = status === null ? "sorry" : (status === "sorry" ? "business" : null);
+    // 昼：空白 → お弁当 → ごめん → 空白（出張なし）／夜：空白 → ごめん → 出張 → 空白
+    let next;
+    if(meal === "l"){
+      next = status === null ? "bento" : (status === "bento" ? "sorry" : null);
+    }else{
+      next = status === null ? "sorry" : (status === "sorry" ? "business" : null);
+    }
     const ref = db.ref(`gohan/marks/${dayKey}/${memberId}/${meal}`);
     const op = next === null ? ref.remove() : ref.set(next);
     op.then(() => {
